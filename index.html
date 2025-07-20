@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BKK Metro Detector</title>
-    <!-- Load TensorFlow.js -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     <style>
         body {
@@ -41,6 +40,7 @@
             border-radius: 8px;
             margin-top: 1.5rem;
             border: 1px solid #ddd;
+            display: none;
         }
         #file-input {
             display: none;
@@ -66,7 +66,7 @@
             border-radius: 8px;
             background-color: #e7f3ff;
             border: 1px solid #1877f2;
-            display: none; /* Initially hidden */
+            display: none;
         }
         .loader {
             border: 4px solid #f3f3f3;
@@ -76,7 +76,7 @@
             height: 40px;
             animation: spin 1s linear infinite;
             margin: 2rem auto 0;
-            display: none; /* Initially hidden */
+            display: none;
         }
         @keyframes spin {
             0% { transform: rotate(0deg); }
@@ -87,7 +87,7 @@
 <body>
     <div class="container">
         <h1>🚇 BKK Metro Detector</h1>
-        <p>Upload an image to classify its metro line (M1, M2, M3, M4).</p>
+        <p>Upload an image to classify its metro line.</p>
         
         <label for="file-input" class="upload-btn">
             Select Image
@@ -100,66 +100,51 @@
     </div>
 
     <script>
-        // --- Configuration ---
         const MODEL_URL = './web_model/model.json';
-        const LABELS_URL = './labels.txt';
+        const METADATA_URL = './web_model/metadata.json';
         const IMAGE_SIZE = 224;
 
-        // --- Get DOM Elements ---
         const fileInput = document.getElementById('file-input');
         const imagePreview = document.getElementById('image-preview');
         const resultText = document.getElementById('result-text');
         const loader = document.getElementById('loader');
         
-        let model;
-        let labels;
+        let model, labels;
 
-        // --- Load Model and Labels Asynchronously ---
-        async function loadResources() {
+        async function init() {
             try {
-                model = await tf.loadLayersModel(MODEL_URL);
-                const response = await fetch(LABELS_URL);
-                const rawLabels = await response.text();
-                // Split by newline and clean up (e.g., "0 M1" -> "M1")
-                labels = rawLabels.split('\n').map(label => label.substring(2).trim()).filter(Boolean);
-                console.log('Model and labels loaded successfully.');
+                const modelPromise = tf.loadLayersModel(MODEL_URL);
+                const metadataPromise = fetch(METADATA_URL);
+                const [loadedModel, metadataResponse] = await Promise.all([modelPromise, metadataPromise]);
+                
+                model = loadedModel;
+                const metadata = await metadataResponse.json();
+                labels = metadata.labels;
+                console.log("Resources ready.");
             } catch (error) {
-                console.error('Failed to load resources:', error);
+                console.error(error);
                 resultText.style.display = 'block';
-                resultText.innerText = 'Error: Could not load the AI model.';
+                resultText.innerText = 'Error: Could not load model or metadata.';
             }
         }
-        loadResources();
+        init();
 
-        // --- Event Listener for File Input ---
         fileInput.addEventListener('change', async (event) => {
             const file = event.target.files[0];
             if (!file) return;
 
-            // Show image preview
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                imagePreview.src = e.target.result;
-            };
-            reader.readAsDataURL(file);
+            imagePreview.style.display = 'block';
+            imagePreview.src = URL.createObjectURL(file);
 
-            // Show loader and hide old result
             loader.style.display = 'block';
             resultText.style.display = 'none';
 
-            // Predict
             await predict(file);
         });
 
-        // --- Prediction Function ---
         async function predict(file) {
-            if (!model || !labels) {
-                console.error("Model or labels not yet loaded.");
-                loader.style.display = 'none';
-                return;
-            }
+            if (!model || !labels) return;
 
-            // Create an HTMLImageElement
             const image = new Image();
             const promise = new Promise((resolve, reject) => {
                 image.onload = resolve;
@@ -167,33 +152,24 @@
             });
             image.src = URL.createObjectURL(file);
             await promise;
+            URL.revokeObjectURL(image.src);
 
-            // --- ADVANCED IMAGE PREPROCESSING ---
-            // This logic replicates ImageOps.fit and the normalization from your Python code.
+            // Preprocess image: resize, normalize to [-1, 1], and batch.
             const tensor = tf.browser.fromPixels(image)
-                .resizeNearestNeighbor([IMAGE_SIZE, IMAGE_SIZE]) // Resize to a square
-                .toFloat();
+                .resizeNearestNeighbor([IMAGE_SIZE, IMAGE_SIZE])
+                .toFloat()
+                .div(tf.scalar(127.5))
+                .sub(tf.scalar(1.0))
+                .expandDims(0);
             
-            // Teachable Machine normalization: (x / 127.5) - 1
-            const normalized = tensor.div(tf.scalar(127.5)).sub(tf.scalar(1.0));
+            const predictions = await model.predict(tensor).data();
             
-            // Add batch dimension
-            const batched = normalized.expandDims(0);
-            
-            // Make a prediction
-            const predictions = await model.predict(batched).data();
-            
-            // Find the highest prediction
             const maxIndex = predictions.indexOf(Math.max(...predictions));
             const predictedClass = labels[maxIndex];
             const confidence = predictions[maxIndex];
 
-            // Clean up tensors
             tensor.dispose();
-            normalized.dispose();
-            batched.dispose();
             
-            // Display results
             loader.style.display = 'none';
             resultText.style.display = 'block';
             resultText.innerHTML = `<strong>Predicted Class:</strong> ${predictedClass}<br><strong>Confidence:</strong> ${confidence.toFixed(4)}`;
