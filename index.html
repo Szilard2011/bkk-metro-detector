@@ -3,115 +3,183 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BKK Metro Detector</title>
+    <title>BKK Metro // Real-Time Detector</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap');
+
+        :root {
+            --bg-color: #121212;
+            --primary-color: #00f2ea;
+            --secondary-color: #9757f3;
+            --text-color: #e0e0e0;
+            --surface-color: #1e1e1e;
+            --border-color: rgba(0, 242, 234, 0.2);
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'Roboto Mono', monospace;
             margin: 0;
-            padding: 2rem;
-            background-color: #f0f2f5;
+            background-color: var(--bg-color);
+            color: var(--text-color);
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
+            padding: 1rem;
         }
+
         .container {
-            background-color: white;
-            padding: 2rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            max-width: 500px;
+            background-color: var(--surface-color);
+            padding: 2rem 2.5rem;
+            border-radius: 16px;
+            box-shadow: 0 0 40px rgba(0, 242, 234, 0.1);
+            border: 1px solid var(--border-color);
+            max-width: 600px;
             width: 100%;
             text-align: center;
+            transition: all 0.3s ease;
         }
-        h1 {
-            color: #1c1e21;
+
+        header h1 {
             font-size: 2rem;
-            margin-bottom: 0.5rem;
+            color: white;
+            margin: 0;
+            text-shadow: 0 0 10px var(--primary-color);
         }
-        p {
-            color: #606770;
+
+        header p {
+            color: #aaa;
+            margin-bottom: 2rem;
+            font-size: 0.9rem;
+        }
+
+        .input-switcher {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
             margin-bottom: 2rem;
         }
-        #image-preview {
-            max-width: 100%;
-            height: auto;
+        
+        .switch-btn {
+            padding: 0.75rem 1.5rem;
+            border: 1px solid var(--border-color);
             border-radius: 8px;
-            margin-top: 1.5rem;
-            border: 1px solid #ddd;
-            display: none;
-        }
-        #file-input {
-            display: none;
-        }
-        .upload-btn {
-            background-color: #1877f2;
-            color: white;
-            padding: 0.8rem 1.5rem;
-            border: none;
-            border-radius: 6px;
-            font-size: 1rem;
+            background-color: transparent;
+            color: var(--primary-color);
+            font-family: inherit;
             cursor: pointer;
-            transition: background-color 0.3s;
+            transition: all 0.3s ease;
         }
-        .upload-btn:hover {
-            background-color: #166fe5;
+
+        .switch-btn.active, .switch-btn:hover {
+            background-color: var(--primary-color);
+            color: var(--bg-color);
+            box-shadow: 0 0 20px var(--primary-color);
         }
-        .result {
-            margin-top: 2rem;
-            font-size: 1.2rem;
-            color: #1c1e21;
-            padding: 1rem;
+
+        .media-container {
+            position: relative;
+            background-color: #000;
             border-radius: 8px;
-            background-color: #e7f3ff;
-            border: 1px solid #1877f2;
-            display: none;
+            overflow: hidden;
+            margin-bottom: 2rem;
+            min-height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
+
+        #image-preview, #webcam-video {
+            display: none;
+            max-width: 100%;
+            max-height: 400px;
+        }
+        
+        #webcam-video {
+            transform: scaleX(-1); /* Mirror view */
+        }
+
+        .placeholder-text {
+            color: #555;
+            font-size: 1rem;
+        }
+
+        #file-input { display: none; }
+
+        .result-container {
+            min-height: 80px;
+            border: 1px dashed var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #result-text { font-size: 1.5rem; font-weight: bold; }
+        #confidence-text { font-size: 1rem; color: #aaa; margin-top: 0.5rem;}
+        #confidence-text span { color: var(--primary-color); font-weight: bold; }
+        
         .loader {
-            border: 4px solid #f3f3f3;
-            border-radius: 50%;
-            border-top: 4px solid #1877f2;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 2rem auto 0;
             display: none;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            color: var(--primary-color);
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🚇 BKK Metro Detector</h1>
-        <p>Upload an image to classify its metro line.</p>
-        
-        <label for="file-input" class="upload-btn">
-            Select Image
-        </label>
+        <header>
+            <h1>🚇 BKK METRO DETECTOR</h1>
+            <p>Real-Time Neural Interface</p>
+        </header>
+
+        <div class="input-switcher">
+            <button class="switch-btn active" id="file-btn">Upload File</button>
+            <button class="switch-btn" id="webcam-btn">Use Webcam</button>
+        </div>
+
+        <div class="media-container">
+            <video id="webcam-video" autoplay playsinline></video>
+            <img id="image-preview" src="" alt="Image Preview">
+            <p class="placeholder-text" id="placeholder">Awaiting input...</p>
+        </div>
+
         <input type="file" id="file-input" accept="image/*">
         
-        <img id="image-preview" src="" alt="Image Preview">
-        <div class="loader" id="loader"></div>
-        <div class="result" id="result-text"></div>
+        <div class="result-container">
+            <p class="loader" id="loader">Initializing Neural Net...</p>
+            <div id="result-wrapper" style="display: none;">
+                <div id="result-text"></div>
+                <div id="confidence-text">Confidence: <span></span></div>
+            </div>
+        </div>
     </div>
 
     <script>
+        // --- Configuration ---
         const MODEL_URL = './web_model/model.json';
         const METADATA_URL = './web_model/metadata.json';
         const IMAGE_SIZE = 224;
 
+        // --- DOM Elements ---
+        const fileBtn = document.getElementById('file-btn');
+        const webcamBtn = document.getElementById('webcam-btn');
         const fileInput = document.getElementById('file-input');
         const imagePreview = document.getElementById('image-preview');
-        const resultText = document.getElementById('result-text');
+        const webcamVideo = document.getElementById('webcam-video');
+        const placeholder = document.getElementById('placeholder');
         const loader = document.getElementById('loader');
-        
-        let model, labels;
+        const resultWrapper = document.getElementById('result-wrapper');
+        const resultText = document.getElementById('result-text');
+        const confidenceText = document.querySelector('#confidence-text span');
 
+        let model, labels, webcam, rafID;
+
+        // --- Main Initialization ---
         async function init() {
+            loader.style.display = 'block';
             try {
                 const modelPromise = tf.loadLayersModel(MODEL_URL);
                 const metadataPromise = fetch(METADATA_URL);
@@ -121,58 +189,117 @@
                 const metadata = await metadataResponse.json();
                 labels = metadata.labels;
                 console.log("Resources ready.");
+                loader.innerText = 'Ready.';
+                setTimeout(() => loader.style.display = 'none', 1000);
             } catch (error) {
                 console.error(error);
-                resultText.style.display = 'block';
-                resultText.innerText = 'Error: Could not load model or metadata.';
+                loader.innerText = 'Error: Model Failed to Load.';
             }
         }
         init();
 
+        // --- Mode Switching Logic ---
+        fileBtn.addEventListener('click', () => switchMode('file'));
+        webcamBtn.addEventListener('click', () => switchMode('webcam'));
+
+        function switchMode(mode) {
+            stopWebcam();
+            if (mode === 'file') {
+                fileBtn.classList.add('active');
+                webcamBtn.classList.remove('active');
+                fileInput.click();
+            } else {
+                fileBtn.classList.remove('active');
+                webcamBtn.classList.add('active');
+                startWebcam();
+            }
+        }
+
+        // --- File Upload Logic ---
         fileInput.addEventListener('change', async (event) => {
             const file = event.target.files[0];
             if (!file) return;
 
+            hideAllMedia();
             imagePreview.style.display = 'block';
-            imagePreview.src = URL.createObjectURL(file);
-
-            loader.style.display = 'block';
-            resultText.style.display = 'none';
-
-            await predict(file);
+            
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                imagePreview.src = e.target.result;
+                const imageElement = new Image();
+                imageElement.src = e.target.result;
+                imageElement.onload = () => predict(imageElement);
+            };
+            reader.readAsDataURL(file);
         });
 
-        async function predict(file) {
+        // --- Webcam Logic ---
+        async function startWebcam() {
+            if (webcam) webcam.stop();
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                webcamVideo.srcObject = stream;
+                webcamVideo.addEventListener('loadeddata', () => {
+                    hideAllMedia();
+                    webcamVideo.style.display = 'block';
+                    rafID = window.requestAnimationFrame(predictWebcamLoop);
+                });
+                webcam = stream.getTracks()[0];
+            } catch (err) {
+                console.error("Webcam error:", err);
+                placeholder.innerText = "Webcam access denied.";
+                placeholder.style.display = 'block';
+            }
+        }
+        
+        function stopWebcam() {
+            if (webcam) webcam.stop();
+            window.cancelAnimationFrame(rafID);
+            webcamVideo.style.display = 'none';
+        }
+
+        function hideAllMedia() {
+            imagePreview.style.display = 'none';
+            webcamVideo.style.display = 'none';
+            placeholder.style.display = 'none';
+        }
+
+        // --- Prediction Core ---
+        async function predictWebcamLoop() {
+            if (webcamVideo.readyState >= 3) { // Check if video has data
+                await predict(webcamVideo);
+            }
+            rafID = window.requestAnimationFrame(predictWebcamLoop);
+        }
+
+        async function predict(imageSource) {
             if (!model || !labels) return;
 
-            const image = new Image();
-            const promise = new Promise((resolve, reject) => {
-                image.onload = resolve;
-                image.onerror = reject;
-            });
-            image.src = URL.createObjectURL(file);
-            await promise;
-            URL.revokeObjectURL(image.src);
+            loader.style.display = 'block';
+            resultWrapper.style.display = 'none';
 
-            // Preprocess image: resize, normalize to [-1, 1], and batch.
-            const tensor = tf.browser.fromPixels(image)
-                .resizeNearestNeighbor([IMAGE_SIZE, IMAGE_SIZE])
-                .toFloat()
-                .div(tf.scalar(127.5))
-                .sub(tf.scalar(1.0))
-                .expandDims(0);
+            // Preprocess image
+            const tensor = tf.tidy(() => {
+                const pixels = tf.browser.fromPixels(imageSource);
+                const resized = tf.image.resizeBilinear(pixels, [IMAGE_SIZE, IMAGE_SIZE]);
+                const normalized = resized.toFloat().div(tf.scalar(127.5)).sub(tf.scalar(1.0));
+                return normalized.expandDims(0);
+_x000D_
+            });
             
             const predictions = await model.predict(tensor).data();
-            
+            tensor.dispose();
+
             const maxIndex = predictions.indexOf(Math.max(...predictions));
-            const predictedClass = labels[maxIndex];
             const confidence = predictions[maxIndex];
 
-            tensor.dispose();
-            
+            // Display results
+            if (confidence > 0.5) { // Confidence threshold
+                resultText.innerText = labels[maxIndex];
+                confidenceText.innerText = `${(confidence * 100).toFixed(1)}%`;
+                resultWrapper.style.display = 'block';
+            }
             loader.style.display = 'none';
-            resultText.style.display = 'block';
-            resultText.innerHTML = `<strong>Predicted Class:</strong> ${predictedClass}<br><strong>Confidence:</strong> ${confidence.toFixed(4)}`;
         }
     </script>
 </body>
